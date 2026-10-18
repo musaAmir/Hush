@@ -2,7 +2,7 @@
 
 A lightweight Mac menu bar app that dims distractions around your active window.
 
-**[Download for macOS](https://github.com/musaAmir/Hush/releases/tag/v0.2.1)** · macOS 14+ · Apple silicon & Intel
+**[Website](https://musaamir.github.io/Hush/)** · **[Download for macOS](https://github.com/musaAmir/Hush/releases/tag/v0.2.1)** · macOS 14+ · Apple silicon & Intel
 
 Adjust dimming and fades, record keyboard shortcuts, pause temporarily, or exclude specific apps. Everything stays on your Mac.
 

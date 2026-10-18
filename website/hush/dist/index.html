@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f4f0">
+  <meta name="description" content="Hush is a free menu bar app for your Mac that quietly dims every window except the one you’re working in.">
+  <meta property="og:title" content="Hush — Dim everything but your work.">
+  <meta property="og:description" content="A free menu bar app for your Mac that quietly dims every window except the one you’re in.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://musaamir.github.io/Hush/">
+  <meta property="og:image" content="https://musaamir.github.io/Hush/assets/app-icon.png">
+  <link rel="canonical" href="https://musaamir.github.io/Hush/">
+  <link rel="icon" href="assets/app-icon.png" type="image/png">
+  <link rel="preload" href="assets/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <title>Hush — Dim everything but your work</title>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <a class="wordmark" href="#" aria-label="Hush home"><img src="assets/app-icon.png" alt="" width="28" height="28">Hush</a>
+    <nav aria-label="Main">
+      <a href="#exceptions">Exceptions</a>
+      <a href="#settings">Settings</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#questions">Questions</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- Hero: a working desktop. Click a window and everything else dims. -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <h1 id="hero-title" class="reveal">Dim everything<br>but your work.</h1>
+        <p class="lead reveal">Hush is a free menu bar app for your Mac. It quietly darkens every window except the one you’re in.</p>
+        <div class="hero-actions reveal">
+          <a class="button" href="https://github.com/musaAmir/Hush/releases" data-download>Download for Mac</a>
+          <span class="meta">Free · macOS 14+ · Apple silicon &amp; Intel</span>
+        </div>
+        <label class="intensity reveal">
+          <span>Dimming <output id="intensity-value" for="intensity">45%</output></span>
+          <input id="intensity" type="range" min="5" max="85" value="45" aria-describedby="demo-hint">
+        </label>
+        <p class="hint reveal" id="demo-hint">Click any window on the desktop, or press <kbd>⌃</kbd><kbd>⌥</kbd><kbd>D</kbd> to switch dimming off and on.</p>
+      </div>
+
+      <div class="stage" aria-label="Interactive demo of Hush on a Mac desktop">
+        <div class="desktop" data-ui data-dimming="on" style="--dim:.45">
+          <div class="menubar" aria-hidden="true">
+            <span class="apple"></span><b class="front-app">Notes</b><span>File</span><span>Edit</span><span>View</span><span class="mb-hide">Window</span>
+            <span class="menubar-right"><button class="hush-item" type="button" tabindex="-1" aria-hidden="true"></button><span class="wifi"></span><span>Sat 9:41</span></span>
+          </div>
+          <div class="shade" aria-hidden="true"></div>
+
+          <button class="win win-notes is-focused" type="button" data-app="Notes" aria-pressed="true" aria-label="Focus the Notes window">
+            <span class="titlebar"><i></i><i></i><i></i><span>Chapter three</span></span>
+            <span class="notes-body">
+              <span class="notes-h">Chapter three</span>
+              <span>The house went quiet after nine. Only the desk lamp stayed on, a small circle of light on the page, and everything past its edge could wait until morning.</span>
+              <span>She wrote until the street outside stopped sounding like a street.</span>
+            </span>
+            <span class="veil"></span>
+          </button>
+
+          <button class="win win-mail" type="button" data-app="Mail" aria-pressed="false" aria-label="Focus the Mail window">
+            <span class="titlebar"><i></i><i></i><i></i><span>Inbox — 4 unread</span></span>
+            <span class="mail-row is-unread"><b>Nora Lindqvist</b><span>Draft notes for Thursday</span><em>9:38</em></span>
+            <span class="mail-row is-unread"><b>Studio Booking</b><span>Your room is confirmed</span><em>9:12</em></span>
+            <span class="mail-row is-unread"><b>Felix Adeyemi</b><span>Photos from the weekend</span><em>8:47</em></span>
+            <span class="mail-row is-unread"><b>Library</b><span>Two books due Monday</span><em>8:05</em></span>
+            <span class="mail-row"><b>Grace Okafor</b><span>Re: dinner on Saturday?</span><em>Fri</em></span>
+            <span class="veil"></span>
+          </button>
+
+          <button class="win win-photo" type="button" data-app="Preview" aria-pressed="false" aria-label="Focus the photo window">
+            <span class="titlebar"><i></i><i></i><i></i><span>facade.jpg</span></span>
+            <img src="assets/facade.jpg" alt="A white apartment block with rows of identical windows" width="1200" height="800">
+            <span class="veil"></span>
+          </button>
+
+          <button class="win win-chat" type="button" data-app="Messages" aria-pressed="false" aria-label="Focus the Messages window">
+            <span class="titlebar"><i></i><i></i><i></i><span>Sam</span></span>
+            <span class="bubble them">Still on for coffee at 4?</span>
+            <span class="bubble me">Yes! Finishing a chapter first</span>
+            <span class="bubble them">No rush. Text me when you surface</span>
+            <span class="veil"></span>
+          </button>
+
+          <button class="win win-music" type="button" data-app="Music" aria-pressed="false" aria-label="Focus the music player">
+            <span class="titlebar"><i></i><i></i><i></i><span>Now playing</span></span>
+            <span class="track"><b>Rain on Glass</b><span>Field Recordings, Vol. 2</span></span>
+            <span class="progress"><i></i></span>
+            <span class="times"><span>2:14</span><span>-4:31</span></span>
+            <span class="veil"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Exceptions: the headline is an input. -->
+    <section class="exceptions section" id="exceptions" aria-labelledby="exceptions-title">
+      <h2 id="exceptions-title" class="reveal">Some apps need the whole screen. Name one.</h2>
+      <div class="type-line reveal" data-ui>
+        <input id="app-input" type="text" value="Keynote" spellcheck="false" autocomplete="off" maxlength="28" aria-label="Type an app to exclude from dimming">
+      </div>
+      <div class="exception-panel reveal" data-ui aria-live="polite">
+        <span class="panel-head">Excluded Apps</span>
+        <span class="ex-row is-new"><span class="ex-icon" id="ex-icon">K</span><span class="ex-name"><b id="ex-name">Keynote</b><span id="ex-id">com.apple.Keynote</span></span><span class="ex-remove">Remove</span></span>
+        <span class="ex-row"><span class="ex-icon" style="--c:#2d8cff">Z</span><span class="ex-name"><b>Zoom</b><span>us.zoom.xos</span></span><span class="ex-remove">Remove</span></span>
+        <span class="ex-foot" id="ex-foot">Dimming pauses while Keynote is active and comes back when you switch away.</span>
+      </div>
+      <div class="examples reveal" aria-label="Try another app">
+        <button type="button" data-example="Figma">Figma</button>
+        <button type="button" data-example="Final Cut Pro">Final Cut Pro</button>
+        <button type="button" data-example="QuickTime Player">QuickTime Player</button>
+      </div>
+    </section>
+
+    <!-- Settings: a panel with margin notes. Pointing at a note dims the rest, Hush-style. -->
+    <section class="settings section" id="settings" aria-labelledby="settings-title">
+      <h2 id="settings-title" class="reveal">Tuned to you.</h2>
+      <div class="plate">
+        <div class="notes notes-left">
+          <button type="button" class="note reveal" data-target="intensity" style="--top:150px"><b>How dark</b><span>Anywhere from a whisper at 5% to nearly black at 85%.</span></button>
+          <button type="button" class="note reveal" data-target="fade" style="--top:262px"><b>How soft</b><span>Fade between windows over 0.05 to 2 seconds, or not at all.</span></button>
+          <button type="button" class="note reveal" data-target="break" style="--top:430px"><b>A short break</b><span>Pause for 5 minutes, 15, or an hour. It resumes by itself.</span></button>
+        </div>
+        <div class="panel" data-ui data-active="">
+          <span class="panel-title">Hush Settings</span>
+          <span class="group">Dimming</span>
+          <span class="card">
+            <span class="prow" data-part="enable"><span>Enable dimming</span><span class="switch is-on"></span></span>
+          </span>
+          <span class="group">Background</span>
+          <span class="card">
+            <span class="prow" data-part="intensity"><span>Dimming intensity</span><span class="slider"><i style="--v:50%"></i></span><span class="val">45%</span></span>
+          </span>
+          <span class="group">Transitions</span>
+          <span class="card" data-part="fade">
+            <span class="prow"><span>Fade between windows</span><span class="switch is-on"></span></span>
+            <span class="prow"><span>Fade duration</span><span class="slider"><i style="--v:23%"></i></span><span class="val">0.50 s</span></span>
+            <span class="prow"><span>Transition curve</span><span class="popup">Smooth</span></span>
+          </span>
+          <span class="group">Take a break</span>
+          <span class="card">
+            <span class="prow" data-part="break"><span>Pause for</span><span class="popup">15 minutes</span><span class="pbutton">Pause</span></span>
+          </span>
+          <span class="group">Keyboard shortcuts</span>
+          <span class="card" data-part="keys">
+            <span class="prow"><span>Toggle dimming</span><span class="caps"><kbd>⌃</kbd><kbd>⌥</kbd><kbd>D</kbd></span></span>
+            <span class="prow"><span>Enable dimming</span><span class="record">Record Shortcut…</span></span>
+          </span>
+          <span class="group">Startup</span>
+          <span class="card">
+            <span class="prow" data-part="login"><span>Launch Hush at login</span><span class="switch is-on"></span></span>
+          </span>
+          <span class="group">Exceptions</span>
+          <span class="card">
+            <span class="prow" data-part="exceptions"><span>Excluded apps</span><span class="val">Keynote, Zoom</span></span>
+          </span>
+          <span class="panel-shade" aria-hidden="true"></span>
+        </div>
+        <div class="notes notes-right">
+          <button type="button" class="note reveal" data-target="keys" style="--top:470px"><b>Your own keys</b><span>Control, Option, D by default. Record any combination you like.</span></button>
+          <button type="button" class="note reveal" data-target="login" style="--top:590px"><b>There when you are</b><span>Starts with your Mac and lives in the menu bar, not the Dock.</span></button>
+          <button type="button" class="note reveal" data-target="exceptions" style="--top:690px"><b>Room for exceptions</b><span>Excluded apps get the whole screen while they’re in front.</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- The real Settings window, as it ships. -->
+    <section class="shots section" aria-labelledby="shots-title">
+      <div class="shots-head">
+        <h2 id="shots-title" class="reveal">One window. Every setting.</h2>
+        <p class="reveal">These are screenshots of Hush itself, in dark mode on macOS 27. It follows your Mac’s light or dark appearance and accent colour.</p>
+      </div>
+      <div class="shots-row">
+        <figure class="reveal"><img src="assets/settings-general.png" alt="Hush Settings, General page: dimming switch, take a break, startup, Accessibility and updates" width="800" height="640" loading="lazy"><figcaption>General</figcaption></figure>
+        <figure class="reveal"><img src="assets/settings-appearance.png" alt="Hush Settings, Appearance page: fade preview, dimming intensity and transition controls" width="800" height="640" loading="lazy"><figcaption>Appearance</figcaption></figure>
+        <figure class="reveal"><img src="assets/settings-exceptions.png" alt="Hush Settings, Exceptions page with an empty list and an Add App button" width="800" height="640" loading="lazy"><figcaption>Exceptions</figcaption></figure>
+      </div>
+    </section>
+
+    <!-- Privacy: a pinned fragment while three statements pass. -->
+    <section class="privacy section" id="privacy" aria-labelledby="privacy-title">
+      <div class="privacy-pin">
+        <div class="sees" data-ui data-step="0">
+          <span class="sees-title">What Hush knows about your screen</span>
+          <span class="sees-row" data-step-row="0"><span>Focused window</span><b>ID 4182 · Notes</b></span>
+          <span class="sees-row" data-step-row="0"><span>Position and size</span><b>312, 140 · 960 × 640</b></span>
+          <span class="sees-row" data-step-row="0"><span>Screen contents</span><b class="no">Never read</b></span>
+          <span class="sees-row" data-step-row="1"><span>Account</span><b class="no">None</b></span>
+          <span class="sees-row" data-step-row="1"><span>Analytics</span><b class="no">None</b></span>
+          <span class="sees-row" data-step-row="2"><span>Update check</span><b>github.com, daily</b></span>
+        </div>
+      </div>
+      <div class="privacy-steps">
+        <h2 id="privacy-title" class="reveal">Quiet about you, too.</h2>
+        <article class="pstep" data-step="0"><h3>Window positions, never pixels.</h3><p>Hush asks macOS which window is in front and where it sits. It never asks for Screen Recording and never sees what’s inside a window.</p></article>
+        <article class="pstep" data-step="1"><h3>No account. No analytics.</h3><p>There is nothing to sign up for and nothing counting what you do. Your settings stay in your Mac’s preferences.</p></article>
+        <article class="pstep" data-step="2"><h3>One small check a day.</h3><p>The only time Hush goes online is to ask GitHub whether there’s a new version. Turn that off in Settings whenever you like.</p></article>
+      </div>
+    </section>
+
+    <!-- Setup: drag through the stages. -->
+    <section class="setup" id="setup" aria-labelledby="setup-title">
+      <div class="setup-clause">
+        <h2 id="setup-title" class="clause" aria-live="polite">First, download and unzip.</h2>
+      </div>
+      <div class="setup-ui">
+        <div class="setup-frag" data-ui data-stage="0">
+          <div class="frag frag-0"><span class="file-icon">ZIP</span><span><b>Hush.zip</b><span>about 1.4 MB · Downloads</span></span><span class="arrow">→</span><span class="app-tile"><img src="assets/app-icon.png" alt="" width="40" height="40"><span>Hush.app</span></span></div>
+          <div class="frag frag-1"><span class="frag-title">Privacy &amp; Security › Accessibility</span><span class="ax-row"><img src="assets/app-icon.png" alt="" width="28" height="28"><b>Hush</b><span class="switch is-on"></span></span><span class="ax-row is-muted"><span class="ax-dot"></span><b>Terminal</b><span class="switch"></span></span></div>
+          <div class="frag frag-2"><span class="mini-desk"><span class="mini-win a"></span><span class="mini-win b is-front"></span><span class="mini-win c"></span><span class="mini-shade"></span></span><span class="frag-cap">Click a window. The rest goes quiet.</span></div>
+          <div class="frag frag-3"><span class="caps big"><kbd>⌃</kbd><kbd>⌥</kbd><kbd>D</kbd></span><span class="frag-cap">Dimming off. Press again to bring it back.</span></div>
+        </div>
+      </div>
+      <div class="setup-track">
+        <input id="stage" type="range" min="0" max="3" step="1" value="0" aria-label="Setup step" aria-valuetext="Download and unzip">
+        <div class="stage-names" aria-hidden="true"><span class="is-on">Download</span><span>Allow</span><span>Focus</span><span>Rest</span></div>
+      </div>
+    </section>
+
+    <!-- Questions: index on the left, one answer on the right. -->
+    <section class="faq section" id="questions" aria-labelledby="faq-title">
+      <div class="faq-list">
+        <h2 id="faq-title" class="faq-heading reveal">Good to know</h2>
+        <button type="button" class="q is-on reveal" aria-expanded="true" data-q="0">Will it work on my Mac?</button>
+        <div class="a-inline">Hush needs macOS 14 Sonoma or later and runs natively on Apple silicon and Intel Macs. It dims every connected display.</div>
+        <button type="button" class="q reveal" aria-expanded="false" data-q="1">Why does it need Accessibility?</button>
+        <div class="a-inline">To know which window is in front. Accessibility tells Hush when focus changes, so it can tuck the shade right behind that window. It doesn’t read your screen.</div>
+        <button type="button" class="q reveal" aria-expanded="false" data-q="2">How do I install it?</button>
+        <div class="a-inline">Unzip the download, move Hush to Applications and open it. Then allow it under System Settings › Privacy &amp; Security › Accessibility. Hush is in early preview and not yet notarized by Apple, so the first time, macOS asks you to choose Open Anyway in the same Privacy &amp; Security pane.</div>
+        <button type="button" class="q reveal" aria-expanded="false" data-q="3">Which windows does it leave alone?</button>
+        <div class="a-inline">Menus, alerts and system panels stay above the shade. Apps on your exceptions list switch dimming off while they’re in front. If Hush can’t match a window, it leaves the screen undimmed rather than guess.</div>
+        <button type="button" class="q reveal" aria-expanded="false" data-q="4">How do updates work?</button>
+        <div class="a-inline">Hush checks GitHub once a day and offers new versions in a small window. You can check by hand from the menu bar or turn automatic checks off in Settings.</div>
+        <button type="button" class="q reveal" aria-expanded="false" data-q="5">Is it really free?</button>
+        <div class="a-inline">Yes. No price, no trial, no account. The source code is on GitHub.</div>
+      </div>
+      <div class="faq-pane" aria-hidden="true"><p id="faq-answer">Hush needs macOS 14 Sonoma or later and runs natively on Apple silicon and Intel Macs. It dims every connected display.</p></div>
+    </section>
+
+    <!-- Closing: a sentence with a blank. -->
+    <section class="cta" id="download" aria-labelledby="cta-title">
+      <figure class="cta-photo"><img src="assets/curves.jpg" alt="A spiral staircase seen from below, curling toward one bright round window" width="900" height="900" loading="lazy"></figure>
+      <div class="cta-copy">
+        <h2 id="cta-title" class="cta-sentence reveal">Dim the rest to <span class="blank"><input id="cta-level" type="number" min="5" max="85" value="45" inputmode="numeric" aria-label="Dimming level in percent">%</span> and <a class="go" href="https://github.com/musaAmir/Hush/releases" data-download>download.</a></h2>
+        <p class="reveal">Free for macOS 14 and later, on Apple silicon and Intel. Early preview: not yet notarized by Apple, so macOS asks once before opening it. The level you pick here also sets the demo at the top.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>A quieter Mac, from the menu bar.</span>
+    <span class="footer-links"><a href="https://github.com/musaAmir/Hush" target="_blank" rel="noopener noreferrer">Source on GitHub</a><a href="https://github.com/musaAmir/Hush/releases" target="_blank" rel="noopener noreferrer">Releases</a><a href="https://github.com/musaAmir/Hush/issues" target="_blank" rel="noopener noreferrer">Report an issue</a></span>
+    <span class="footer-end">© 2026 · <a href="#privacy">Privacy</a> · Photos by Roman Kraft and Len dela Cruz on Unsplash</span>
+  </footer>
+</body>
+</html>
