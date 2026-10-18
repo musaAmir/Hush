@@ -13,11 +13,47 @@ final class ShortcutRecorder: NSButton {
     init(shortcut: KeyboardShortcut?) {
         self.shortcut = shortcut
         super.init(frame: .zero)
-        bezelStyle = .rounded; target = self; action = #selector(record)
+        isBordered = false; target = self; action = #selector(record)
         setAccessibilityLabel("Record keyboard shortcut")
         updateTitle()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override var title: String { didSet { invalidateIntrinsicContentSize(); needsDisplay = true } }
+    override var intrinsicContentSize: NSSize {
+        guard monitor == nil, let shortcut else { return NSSize(width: Self.textWidth(title) + 20, height: 22) }
+        let keys = Self.keys(shortcut)
+        return NSSize(width: keys.map(Self.capWidth).reduce(0, +) + CGFloat(keys.count - 1) * 4, height: 22)
+    }
+    // Shows a saved shortcut as one keycap per key, and anything else as a rounded pill.
+    override func draw(_ dirtyRect: NSRect) {
+        let fill = isHighlighted ? NSColor.tertiaryLabelColor : NSColor.quaternaryLabelColor
+        guard monitor == nil, let shortcut else {
+            (monitor == nil ? fill : NSColor.controlAccentColor.withAlphaComponent(0.25)).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
+            Self.drawText(title, in: bounds, color: .secondaryLabelColor)
+            return
+        }
+        var x: CGFloat = 0
+        for key in Self.keys(shortcut) {
+            let cap = NSRect(x: x, y: (bounds.height - 20) / 2, width: Self.capWidth(key), height: 20)
+            fill.setFill(); NSBezierPath(roundedRect: cap, xRadius: 5, yRadius: 5).fill()
+            Self.drawText(key, in: cap, color: .labelColor)
+            x = cap.maxX + 4
+        }
+    }
+    override var focusRingMaskBounds: NSRect { bounds }
+    override func drawFocusRingMask() { NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill() }
+    private static let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+    private static func keys(_ shortcut: KeyboardShortcut) -> [String] {
+        shortcut.display.dropLast(shortcut.keyName.count).map(String.init) + [shortcut.keyName]
+    }
+    private static func textWidth(_ text: String) -> CGFloat { ceil((text as NSString).size(withAttributes: [.font: font]).width) }
+    private static func capWidth(_ key: String) -> CGFloat { max(22, textWidth(key) + 12) }
+    private static func drawText(_ text: String, in rect: NSRect, color: NSColor) {
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let size = (text as NSString).size(withAttributes: attributes)
+        (text as NSString).draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2), withAttributes: attributes)
+    }
     deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         if newWindow == nil { stop() }

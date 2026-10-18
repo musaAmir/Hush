@@ -10,10 +10,12 @@ trap 'rm -rf "$STAGING"' EXIT
 APP="$STAGING/$NAME.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# The Xcode SwiftPM backend currently records the deployment target as the SDK
+# version. Native SwiftPM links the installed SDK, enabling modern AppKit styling.
 BINS=()
 for ARCH in "${ARCHITECTURES[@]}"; do
-  swift build -c release --arch "$ARCH" --scratch-path "build/spm-$ARCH"
-  BINS+=("$(swift build -c release --arch "$ARCH" --scratch-path "build/spm-$ARCH" --show-bin-path)")
+  swift build --build-system native -c release --arch "$ARCH" --scratch-path "build/spm-$ARCH"
+  BINS+=("$(swift build --build-system native -c release --arch "$ARCH" --scratch-path "build/spm-$ARCH" --show-bin-path)")
 done
 INPUTS=()
 for BIN in "${BINS[@]}"; do INPUTS+=("$BIN/$NAME"); done

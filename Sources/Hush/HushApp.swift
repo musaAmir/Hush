@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item("Settings…", #selector(showSettings), key: ","))
         menu.addItem(item("Quit Hush", #selector(quit), key: "q"))
         statusItem.menu = menu
+        NSApp.mainMenu = mainMenu()
         tracker.shouldDimApplication = { [weak self] id in self?.settings.isExcluded(id) != true }
         tracker.onWindow = { [weak self] window in
             guard let self, self.enabled, self.pausedUntil == nil else { return }
@@ -74,6 +75,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func applicationDidResignActive(_ notification: Notification) { settingsWindow?.cancelRecording() }
     func menuWillOpen(_ menu: NSMenu) { syncControls() }
+    // Shown in the menu bar only while Settings is open and Hush is in the Dock.
+    private func mainMenu() -> NSMenu {
+        let main = NSMenu()
+        let app = NSMenu(title: "Hush")
+        app.addItem(item("Settings…", #selector(showSettings), key: ","))
+        app.addItem(.separator())
+        app.addItem(item("Quit Hush", #selector(quit), key: "q"))
+        let window = NSMenu(title: "Window")
+        window.addItem(NSMenuItem(title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+        window.addItem(NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
+        for submenu in [app, window] {
+            let entry = NSMenuItem(title: submenu.title, action: nil, keyEquivalent: ""); entry.submenu = submenu; main.addItem(entry)
+        }
+        return main
+    }
     private func item(_ title: String, _ selector: Selector, key: String = "") -> NSMenuItem {
         let value = NSMenuItem(title: title, action: selector, keyEquivalent: key); value.target = self; return value
     }
@@ -157,9 +173,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             controller.onRequestAccess = {
                 _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
             }
-            controller.onClose = { [weak self] in self?.settingsWindow = nil }
+            controller.onClose = { [weak self] in
+                self?.settingsWindow = nil
+                // Back to a menu bar-only app once Settings closes.
+                NSApp.setActivationPolicy(.accessory)
+            }
             settingsWindow = controller
         }
+        // Show the Dock icon (and app menu) only while Settings is open.
+        NSApp.setActivationPolicy(.regular)
         syncControls(); settingsWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
     }
     @objc private func quit() { NSApp.terminate(nil) }
