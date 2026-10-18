@@ -1,7 +1,5 @@
 import AppKit
 import ApplicationServices
-import Carbon
-import ServiceManagement
 import HushCore
 
 @main enum HushApp {
@@ -14,126 +12,155 @@ import HushCore
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private let settings = HushSettings()
     private let tracker = FocusTracker()
     private let dimmer = Dimmer()
     private var statusItem: NSStatusItem!
     private var toggleItem: NSMenuItem!
-    private var hotkey: GlobalHotkey?
-    private var preferences: NSWindow?
-    private var permissionLabel: NSTextField?
-    private var preview: PreviewView?
-    private var enabled = UserDefaults.standard.object(forKey: "enabled") as? Bool ?? true
-    private var intensity = FocusGeometry.opacity(UserDefaults.standard.object(forKey: "intensity") as? Double ?? 0.45)
+    private var pauseItem: NSMenuItem!
+    private var resumeItem: NSMenuItem!
+    private var hotkeys: [ShortcutAction: GlobalHotkey] = [:]
+    private var shortcutWarnings: [ShortcutAction: String] = [:]
+    private var settingsWindow: SettingsWindowController?
+    private var enabled = true
+    private var pausedUntil: Date?
+    private var pauseTimer: Timer?
+    private var recordingShortcut = false
+    private var displayObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "").contains(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }) {
             NSApp.terminate(nil); return
         }
+        enabled = settings.enabledAtLaunch
+        settings.enabled = enabled
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.autosaveName = "Hush"
         statusItem.button?.image = NSImage(systemSymbolName: "circle.lefthalf.filled", accessibilityDescription: "Hush")
         statusItem.button?.image?.isTemplate = true
-        statusItem.button?.toolTip = "Hush · Focus dimmer"
-        let menu = NSMenu(); menu.delegate = self
-        toggleItem = NSMenuItem(title: "Enable Dimming", action: #selector(toggle), keyEquivalent: "")
-        toggleItem.target = self; menu.addItem(toggleItem)
-        menu.addItem(.separator())
-        for (title, selector) in [("Preferences…", #selector(showPreferences)), ("Quit Hush", #selector(quit))] {
-            let item = NSMenuItem(title: title, action: selector, keyEquivalent: title.hasPrefix("Quit") ? "q" : ",")
-            item.target = self; menu.addItem(item)
+        let menu = NSMenu(); menu.delegate = self; menu.autoenablesItems = false
+        toggleItem = item("Enable Dimming", #selector(toggle)); menu.addItem(toggleItem)
+        pauseItem = NSMenuItem(title: "Pause Dimming", action: nil, keyEquivalent: "")
+        let pauses = NSMenu(); pauses.autoenablesItems = false
+        for (title, minutes) in [("5 minutes", 5), ("15 minutes", 15), ("1 hour", 60)] {
+            let choice = item(title, #selector(pauseFromMenu(_:))); choice.tag = minutes; pauses.addItem(choice)
         }
+        pauseItem.submenu = pauses; menu.addItem(pauseItem)
+        resumeItem = item("Resume Dimming", #selector(resume)); menu.addItem(resumeItem)
+        menu.addItem(.separator())
+        menu.addItem(item("Settings…", #selector(showSettings), key: ","))
+        menu.addItem(item("Quit Hush", #selector(quit), key: "q"))
         statusItem.menu = menu
-        hotkey = GlobalHotkey(key: UInt32(kVK_ANSI_D), signature: 0x48555348)
-        hotkey?.action = { [weak self] in self?.toggle() }
-        tracker.onWindow = { [weak self] in self?.dimmer.show(window: $0) }
-        tracker.onPermission = { [weak self] in self?.updatePermission($0) }
-        dimmer.opacity = intensity
-        applyEnabled()
-        if !AXIsProcessTrusted() { showPreferences() }
+        tracker.shouldDimApplication = { [weak self] id in self?.settings.isExcluded(id) != true }
+        tracker.onWindow = { [weak self] window in
+            guard let self, self.enabled, self.pausedUntil == nil else { return }
+            self.dimmer.show(window: window)
+        }
+        tracker.onPermission = { [weak self] _ in self?.syncControls() }
+        displayObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.applyAppearance() }
+        applyAppearance(); registerShortcuts(); applyEnabled()
+        if !AXIsProcessTrusted() { showSettings() }
     }
-    func applicationWillTerminate(_ notification: Notification) { tracker.stop(); dimmer.hide(); hotkey = nil }
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showPreferences(); return false }
-    func applicationDidBecomeActive(_ notification: Notification) { updatePermission(AXIsProcessTrusted()); tracker.refresh() }
-    func menuWillOpen(_ menu: NSMenu) { toggleItem.state = enabled ? .on : .off; tracker.refresh() }
-    @objc private func toggle() {
-        enabled.toggle(); UserDefaults.standard.set(enabled, forKey: "enabled"); applyEnabled()
-        if enabled && !AXIsProcessTrusted() { showPreferences() }
+    func applicationWillTerminate(_ notification: Notification) {
+        pauseTimer?.invalidate(); settingsWindow?.cancelRecording(); hotkeys.removeAll()
+        tracker.stop(); dimmer.hide()
+        if let displayObserver { NSWorkspace.shared.notificationCenter.removeObserver(displayObserver) }
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showSettings(); return false }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        if let pausedUntil, pausedUntil <= Date() { pause(minutes: nil) }
+        syncControls(); tracker.refresh()
+    }
+    func applicationDidResignActive(_ notification: Notification) { settingsWindow?.cancelRecording() }
+    func menuWillOpen(_ menu: NSMenu) { syncControls() }
+    private func item(_ title: String, _ selector: Selector, key: String = "") -> NSMenuItem {
+        let value = NSMenuItem(title: title, action: selector, keyEquivalent: key); value.target = self; return value
+    }
+    @objc private func toggle() { setEnabled(!enabled || pausedUntil != nil) }
+    private func setEnabled(_ value: Bool) {
+        enabled = value; settings.enabled = value
+        pauseTimer?.invalidate(); pauseTimer = nil; pausedUntil = nil
+        applyEnabled()
+        if enabled && !AXIsProcessTrusted() { showSettings() }
     }
     private func applyEnabled() {
-        toggleItem?.state = enabled ? .on : .off
-        if enabled { tracker.start() } else { tracker.stop() }
+        if enabled && pausedUntil == nil { tracker.start() }
+        else { tracker.stop(); dimmer.hide(animated: true) }
+        syncControls()
     }
-    private func updatePermission(_ trusted: Bool) {
-        permissionLabel?.stringValue = trusted ? "Accessibility enabled. Hush follows the active window." : "Enable Accessibility so Hush can follow the active window."
+    private func applyAppearance() {
+        dimmer.fadeDuration = settings.effectiveFadeDuration(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        dimmer.fadeCurve = settings.fadeCurve
+        dimmer.opacity = settings.intensity
     }
-    @objc private func requestPermission() {
-        _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+    @objc private func pauseFromMenu(_ sender: NSMenuItem) { pause(minutes: sender.tag) }
+    @objc private func resume() { pause(minutes: nil) }
+    private func pause(minutes: Int?) {
+        pauseTimer?.invalidate(); pauseTimer = nil
+        if let minutes, enabled {
+            pausedUntil = Date().addingTimeInterval(Double(minutes) * 60)
+            let timer = Timer(timeInterval: Double(minutes) * 60, repeats: false) { [weak self] _ in self?.pause(minutes: nil) }
+            RunLoop.main.add(timer, forMode: .common); pauseTimer = timer
+        } else { pausedUntil = nil }
+        applyEnabled()
     }
-    @objc private func openAccessibility() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    private func syncControls() {
+        toggleItem?.state = enabled && pausedUntil == nil ? .on : .off
+        pauseItem?.isEnabled = enabled && pausedUntil == nil
+        resumeItem?.isHidden = pausedUntil == nil
+        statusItem?.button?.toolTip = pausedUntil != nil ? "Hush · Paused" : enabled ? "Hush · Dimming on" : "Hush · Dimming off"
+        settingsWindow?.updateState(enabled: enabled, pausedUntil: pausedUntil, trusted: AXIsProcessTrusted(), warnings: ShortcutAction.allCases.compactMap { shortcutWarnings[$0] })
     }
-    @objc private func changeIntensity(_ sender: NSSlider) {
-        intensity = FocusGeometry.opacity(sender.doubleValue)
-        dimmer.opacity = intensity; preview?.opacity = intensity
-        UserDefaults.standard.set(intensity, forKey: "intensity")
-    }
-    @objc private func launchAtLogin(_ sender: NSButton) {
-        do {
-            if sender.state == .on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-            if SMAppService.mainApp.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
-        } catch {
-            let alert = NSAlert(); alert.messageText = "Couldn’t change Launch at Login"; alert.informativeText = error.localizedDescription; alert.runModal()
+    private func makeHotkey(_ shortcut: KeyboardShortcut, action: ShortcutAction) -> GlobalHotkey {
+        let hotkey = GlobalHotkey(shortcut: shortcut, id: action.identifier)
+        hotkey.action = { [weak self] in
+            switch action { case .toggle: self?.toggle(); case .enable: self?.setEnabled(true); case .disable: self?.setEnabled(false) }
         }
-        sender.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        return hotkey
     }
-    @objc private func showPreferences() {
-        if let preferences { preferences.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
-        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 16
-        func label(_ text: String, size: CGFloat, weight: NSFont.Weight = .regular) -> NSTextField {
-            let label = NSTextField(wrappingLabelWithString: text); label.font = .systemFont(ofSize: size, weight: weight); return label
+    private func registerShortcuts() {
+        hotkeys.removeAll(); shortcutWarnings.removeAll()
+        guard !recordingShortcut else { return }
+        for action in ShortcutAction.allCases {
+            guard let shortcut = settings.shortcut(for: action) else { continue }
+            let hotkey = makeHotkey(shortcut, action: action)
+            if hotkey.available { hotkeys[action] = hotkey }
+            else { shortcutWarnings[action] = "\(action.title): \(shortcut.display) is unavailable. Choose another shortcut." }
         }
-        stack.addArrangedSubview(label("Hush", size: 28, weight: .semibold))
-        let subtitle = label("A quieter backdrop for the window that matters.", size: 13); subtitle.textColor = .secondaryLabelColor; stack.addArrangedSubview(subtitle)
-        let illustration = PreviewView(frame: .zero); illustration.opacity = intensity
-        illustration.translatesAutoresizingMaskIntoConstraints = false; illustration.heightAnchor.constraint(equalToConstant: 160).isActive = true
-        illustration.widthAnchor.constraint(equalToConstant: 360).isActive = true; stack.addArrangedSubview(illustration); preview = illustration
-        stack.addArrangedSubview(label("Dimming intensity", size: 13, weight: .medium))
-        let slider = NSSlider(value: intensity, minValue: 0.05, maxValue: 0.85, target: self, action: #selector(changeIntensity(_:)))
-        slider.isContinuous = true; slider.setAccessibilityLabel("Dimming intensity"); slider.widthAnchor.constraint(equalToConstant: 360).isActive = true
-        stack.addArrangedSubview(slider)
-        let permission = label("", size: 12); permission.textColor = .secondaryLabelColor; stack.addArrangedSubview(permission); permissionLabel = permission
-        let buttons = NSStackView(views: [NSButton(title: "Enable Accessibility…", target: self, action: #selector(requestPermission)), NSButton(title: "Open Settings", target: self, action: #selector(openAccessibility))]); buttons.spacing = 10; stack.addArrangedSubview(buttons)
-        let login = NSButton(checkboxWithTitle: "Launch at login", target: self, action: #selector(launchAtLogin(_:)))
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off; stack.addArrangedSubview(login)
-        let shortcut = hotkey?.available == true ? "⌃⌥D toggles dimming." : "⌃⌥D is in use by another app. Use the Hush menu to toggle."
-        let detail = label(shortcut + "\nHush reacts to window events. It doesn’t capture your screen.", size: 11); detail.textColor = .secondaryLabelColor; stack.addArrangedSubview(detail)
-        let container = NSView(); stack.translatesAutoresizingMaskIntoConstraints = false; container.addSubview(stack)
-        NSLayoutConstraint.activate([stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 26), stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -26), stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 26), stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -26)])
-        let window = NSWindow(contentRect: CGRect(x: 0,y: 0,width: 412,height: 570), styleMask: [.titled,.closable], backing: .buffered, defer: false)
-        window.title = "Hush"; window.contentView = container; window.isReleasedWhenClosed = false; window.delegate = self
-        window.center(); preferences = window; updatePermission(AXIsProcessTrusted()); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+        syncControls()
     }
-    func windowWillClose(_ notification: Notification) {
-        preferences = nil; permissionLabel = nil; preview = nil
+    private func changeShortcut(_ action: ShortcutAction, to shortcut: KeyboardShortcut?) -> String? {
+        if let shortcut {
+            guard shortcut.isValid else { return "Include Control, Option or Command with your key." }
+            if ShortcutAction.allCases.contains(where: { $0 != action && settings.shortcut(for: $0).map(shortcut.matches) == true }) {
+                return "That shortcut is assigned to another Hush action. Choose a different combination."
+            }
+            if let previous = settings.shortcut(for: action), previous.matches(shortcut), hotkeys[action]?.available == true { return nil }
+            let replacement = makeHotkey(shortcut, action: action)
+            guard replacement.available else { return "That shortcut is already in use. Your previous shortcut was kept." }
+            settings.setShortcut(shortcut, for: action)
+            if !recordingShortcut { hotkeys[action] = replacement }
+        } else { settings.setShortcut(nil, for: action); hotkeys.removeValue(forKey: action) }
+        shortcutWarnings.removeValue(forKey: action)
+        syncControls()
+        return nil
+    }
+    @objc private func showSettings() {
+        if settingsWindow == nil {
+            let controller = SettingsWindowController(settings: settings)
+            controller.onEnabledChange = { [weak self] in self?.setEnabled($0) }
+            controller.onPause = { [weak self] in self?.pause(minutes: $0) }
+            controller.onChange = { [weak self] in self?.applyAppearance(); self?.tracker.refresh(); self?.syncControls() }
+            controller.onShortcutChange = { [weak self] action, shortcut in self?.changeShortcut(action, to: shortcut) }
+            controller.onRecordingChange = { [weak self] value in self?.recordingShortcut = value; self?.registerShortcuts() }
+            controller.onRequestAccess = {
+                _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+            }
+            controller.onClose = { [weak self] in self?.settingsWindow = nil }
+            settingsWindow = controller
+        }
+        syncControls(); settingsWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
     }
     @objc private func quit() { NSApp.terminate(nil) }
-}
-
-final class PreviewView: NSView {
-    var opacity = 0.45 { didSet { needsDisplay = true } }
-    override func draw(_ dirtyRect: NSRect) {
-        let background = NSBezierPath(roundedRect: bounds, xRadius: 14, yRadius: 14)
-        NSColor(calibratedRed: 0.84, green: 0.82, blue: 0.79, alpha: 1).setFill(); background.fill()
-        let back = CGRect(x: 25, y: 45, width: 180, height: 92)
-        NSColor(calibratedWhite: 0.96, alpha: 1).setFill(); NSBezierPath(roundedRect: back, xRadius: 7,yRadius: 7).fill()
-        let front = CGRect(x: 140,y: 22,width: 195,height: 110)
-        let shade = NSBezierPath(roundedRect: bounds, xRadius: 14,yRadius: 14); shade.append(NSBezierPath(roundedRect: front,xRadius: 7,yRadius: 7)); shade.windingRule = .evenOdd
-        NSColor.black.withAlphaComponent(opacity).setFill(); shade.fill()
-        NSColor(calibratedWhite: 0.98, alpha: 1).setFill(); NSBezierPath(roundedRect: front,xRadius: 7,yRadius: 7).fill()
-        let attrs: [NSAttributedString.Key:Any] = [.font:NSFont.systemFont(ofSize: 13,weight:.medium),.foregroundColor:NSColor.darkGray]
-        ("Room to focus." as NSString).draw(at: CGPoint(x: 165,y: 72),withAttributes: attrs)
-        NSColor(calibratedWhite: 0.8,alpha: 1).setFill()
-        for y in [55,44] { NSBezierPath(roundedRect: CGRect(x:165,y:y,width:120,height:3),xRadius:1.5,yRadius:1.5).fill() }
-    }
 }

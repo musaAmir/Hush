@@ -5,6 +5,37 @@ import HushCore
 
 final class DimmerLayeringTests: XCTestCase {
     @MainActor
+    func testInterruptedFadeDoesNotHideNewFocusAndAnimationsStopWhenDone() throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory); NSApp.finishLaunching()
+        guard let screen = NSScreen.screens.first else { throw XCTSkip("Requires a window server") }
+        let window = NSWindow(contentRect: CGRect(x: screen.frame.midX - 100, y: screen.frame.midY - 100, width: 200, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.orderFrontRegardless()
+        let dimmer = Dimmer(); dimmer.fadeDuration = 0.08
+        defer { dimmer.hide(); window.close() }
+        let target = FocusedWindow(number: window.windowNumber, level: window.level.rawValue)
+        dimmer.show(window: target)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        let panels = NSApp.windows.compactMap { $0 as? DimmerPanel }.filter(\.isVisible)
+        XCTAssertFalse(panels.isEmpty)
+        XCTAssertTrue(panels.allSatisfy { $0.contentView?.layer?.animation(forKey: "hush.fade") != nil })
+        dimmer.hide(animated: true)
+        dimmer.show(window: target)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertTrue(panels.allSatisfy(\.isVisible), "Completion of the interrupted fade must not hide the new focus")
+        XCTAssertTrue(panels.allSatisfy { $0.contentView?.layer?.animationKeys()?.isEmpty != false })
+        for panel in panels { XCTAssertEqual(panel.contentView?.layer?.opacity ?? -1, 0.45, accuracy: 0.001) }
+        dimmer.hide(animated: true)
+        dimmer.fadeDuration = 0
+        XCTAssertTrue(panels.allSatisfy { !$0.isVisible }, "Turning fades off must finish a pending fade-out immediately")
+        dimmer.fadeDuration = 0.08
+        dimmer.show(window: target)
+        dimmer.hide(animated: true)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertTrue(panels.allSatisfy { !$0.isVisible })
+    }
+
+    @MainActor
     func testDimmingStaysBehindWindowWithoutFollowingItsFrame() throws {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)

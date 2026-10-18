@@ -5,6 +5,7 @@ import HushCore
 final class FocusTracker {
     var onWindow: ((FocusedWindow?) -> Void)?
     var onPermission: ((Bool) -> Void)?
+    var shouldDimApplication: ((String?) -> Bool)?
     private let queue = DispatchQueue(label: "com.musaamir.hush.accessibility", qos: .userInitiated)
     private var subscriptions: [NSObjectProtocol] = []
     private var enabled = false
@@ -78,7 +79,8 @@ final class FocusTracker {
         let trusted = AXIsProcessTrusted()
         onPermission?(trusted)
         guard trusted, let front = NSWorkspace.shared.frontmostApplication,
-              front.processIdentifier != ProcessInfo.processInfo.processIdentifier else {
+              front.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+              shouldDimApplication?(front.bundleIdentifier) != false else {
             onWindow?(nil)
             queue.async { self.clearObservation() }
             return
