@@ -68,4 +68,43 @@ final class DimmerLayeringTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         try assertWindowAboveDimmer()
     }
+
+    @MainActor
+    func testSwitchingFocusKeepsTheShadeAndFadesOnlyThePreviousWindow() throws {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.accessory); NSApp.finishLaunching()
+        guard let screen = NSScreen.screens.first else { throw XCTSkip("Requires a window server") }
+        func makeWindow(_ dx: CGFloat) -> NSWindow {
+            let window = NSWindow(contentRect: CGRect(x: screen.frame.midX + dx, y: screen.frame.midY - 100, width: 200, height: 200), styleMask: [.titled], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false; window.orderFrontRegardless(); return window
+        }
+        let first = makeWindow(-260), second = makeWindow(60)
+        let dimmer = Dimmer(); dimmer.fadeDuration = 0.08
+        defer { dimmer.hide(); first.close(); second.close() }
+        dimmer.show(window: FocusedWindow(number: first.windowNumber, level: first.level.rawValue))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        let shades = NSApp.windows.compactMap { $0 as? DimmerPanel }.filter { $0.isVisible && $0.frame.size == screen.frame.size }
+        XCTAssertFalse(shades.isEmpty)
+
+        second.orderFrontRegardless()
+        dimmer.show(window: FocusedWindow(number: second.windowNumber, level: second.level.rawValue))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        for shade in shades {
+            XCTAssertNil(shade.contentView?.layer?.animation(forKey: "hush.fade"), "Already-dimmed windows must not fade again")
+            XCTAssertEqual(shade.contentView?.layer?.presentation()?.opacity ?? shade.contentView?.layer?.opacity ?? -1, 0.45, accuracy: 0.001)
+        }
+        let veil = try XCTUnwrap(NSApp.windows.compactMap { $0 as? DimmerPanel }.first { $0.isVisible && $0.frame.size == first.frame.size })
+        XCTAssertNotNil(veil.contentView?.layer?.animation(forKey: "hush.fade"), "The window losing focus fades down")
+
+        RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+        XCTAssertFalse(veil.isVisible)
+        let info = try XCTUnwrap(CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]])
+        let numbers = info.compactMap { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue }
+        let secondIndex = try XCTUnwrap(numbers.firstIndex(of: second.windowNumber))
+        let firstIndex = try XCTUnwrap(numbers.firstIndex(of: first.windowNumber))
+        for shade in shades {
+            let index = try XCTUnwrap(numbers.firstIndex(of: shade.windowNumber))
+            XCTAssertGreaterThan(index, secondIndex); XCTAssertLessThan(index, firstIndex)
+        }
+    }
 }

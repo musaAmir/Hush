@@ -9,13 +9,17 @@ final class DimmerPanel: NSPanel {
 
 final class Dimmer {
     private var panels: [DimmerPanel] = []
+    private var veil: DimmerPanel?
     private var focusedWindow: FocusedWindow?
     private var transitionID = 0
     var fadeDuration: Double = 0 {
         didSet {
             if fadeDuration <= 0 {
                 if focusedWindow == nil { hide() }
-                else { transitionID += 1; animate(to: Float(FocusGeometry.opacity(opacity)), duration: 0) }
+                else if let focusedWindow {
+                    transitionID += 1; veil?.orderOut(nil); place(below: focusedWindow)
+                    animate(to: Float(FocusGeometry.opacity(opacity)), duration: 0)
+                }
             }
         }
     }
@@ -32,6 +36,7 @@ final class Dimmer {
         transitionID += 1
         let token = transitionID
         focusedWindow = nil
+        veil?.orderOut(nil)
         guard animated, fadeDuration > 0, panels.contains(where: \.isVisible) else {
             animate(to: 0, duration: 0)
             panels.forEach { $0.orderOut(nil) }
@@ -51,41 +56,82 @@ final class Dimmer {
         let screensChanged = panels.count != screens.count || zip(panels, screens).contains { $0.frame != $1.frame }
         if screensChanged {
             panels.forEach { $0.close() }
-            panels = screens.map { screen in
-                let panel = DimmerPanel(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-                panel.isReleasedWhenClosed = false
-                panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-                panel.animationBehavior = .none
-                panel.backgroundColor = .clear; panel.isOpaque = false
-                panel.hasShadow = false; panel.ignoresMouseEvents = true
-                panel.hidesOnDeactivate = false
-                let shade = NSView(frame: CGRect(origin: .zero, size: screen.frame.size))
-                shade.wantsLayer = true
-                shade.layer?.backgroundColor = NSColor.black.cgColor
-                shade.layer?.opacity = 0
-                panel.contentView = shade
-                panel.setAccessibilityElement(false)
-                return panel
-            }
+            panels = screens.map { makePanel(frame: $0.frame) }
         }
         guard screensChanged || focusedWindow != window || panels.contains(where: { !$0.isVisible }) else { return }
         transitionID += 1
-        // Reset only on a focus change, never during window movement or resizing.
+        let token = transitionID
+        let target = Float(FocusGeometry.opacity(opacity))
+        let previous = focusedWindow
+        let settled = !screensChanged && previous != nil && panels.allSatisfy(\.isVisible)
+        focusedWindow = window
+        veil?.orderOut(nil)
+        // Windows already behind the shade stay dimmed. Only the window losing focus
+        // fades down, under a veil of its own; then the shade moves behind the new window.
+        if settled, let previous, fadeDuration > 0, let frame = Self.frame(of: previous) {
+            place(below: previous)
+            let veil = self.veil ?? makePanel(frame: frame, cornerRadius: 10)
+            self.veil = veil
+            veil.setFrame(frame, display: false)
+            veil.level = NSWindow.Level(rawValue: previous.level)
+            veil.order(.above, relativeTo: previous.number)
+            animate(to: 0, duration: 0, layers: [veil])
+            animate(to: target, duration: fadeDuration, layers: [veil]) { [weak self] in
+                DispatchQueue.main.async {
+                    guard let self, self.transitionID == token else { return }
+                    self.place(below: window); veil.orderOut(nil)
+                }
+            }
+            return
+        }
+        // Reset only when the shade first appears, never during window movement or resizing.
         // The real window stays above the shade throughout the fade.
-        animate(to: 0, duration: 0)
+        if !settled { animate(to: 0, duration: 0) }
+        place(below: window)
+        if !settled { animate(to: target, duration: fadeDuration) }
+    }
+
+    private func place(below window: FocusedWindow) {
         for panel in panels {
             panel.level = NSWindow.Level(rawValue: window.level)
             panel.order(.below, relativeTo: window.number)
         }
-        focusedWindow = window
-        animate(to: Float(FocusGeometry.opacity(opacity)), duration: fadeDuration)
     }
 
-    private func animate(to value: Float, duration: Double, completion: (() -> Void)? = nil) {
+    private func makePanel(frame: CGRect, cornerRadius: CGFloat = 0) -> DimmerPanel {
+        let panel = DimmerPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        panel.animationBehavior = .none
+        panel.backgroundColor = .clear; panel.isOpaque = false
+        panel.hasShadow = false; panel.ignoresMouseEvents = true
+        panel.hidesOnDeactivate = false
+        let shade = NSView(frame: CGRect(origin: .zero, size: frame.size))
+        shade.autoresizingMask = [.width, .height]
+        shade.wantsLayer = true
+        shade.layer?.backgroundColor = NSColor.black.cgColor
+        shade.layer?.cornerRadius = cornerRadius; shade.layer?.cornerCurve = .continuous
+        shade.layer?.opacity = 0
+        panel.contentView = shade
+        panel.setAccessibilityElement(false)
+        return panel
+    }
+
+    // Window Server bounds (top-left origin) converted to AppKit screen coordinates.
+    private static func frame(of window: FocusedWindow) -> CGRect? {
+        guard let info = (CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(window.number)) as? [[String: Any]])?.first,
+              info[kCGWindowIsOnscreen as String] as? Bool == true,
+              let bounds = info[kCGWindowBounds as String] as? NSDictionary,
+              let rect = CGRect(dictionaryRepresentation: bounds),
+              let primary = NSScreen.screens.first else { return nil }
+        return CGRect(x: rect.minX, y: primary.frame.maxY - rect.maxY, width: rect.width, height: rect.height)
+    }
+
+    private func animate(to value: Float, duration: Double, layers panels: [DimmerPanel]? = nil, completion: (() -> Void)? = nil) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         if duration > 0 { CATransaction.setCompletionBlock(completion) }
-        for panel in panels {
+        for panel in panels ?? self.panels {
             guard let layer = panel.contentView?.layer else { continue }
             let current = layer.presentation()?.opacity ?? layer.opacity
             layer.removeAnimation(forKey: "hush.fade")
