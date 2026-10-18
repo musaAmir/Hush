@@ -2,12 +2,13 @@
 
 A small Mac menu bar app that dims the background around the active window.
 
-macOS 14+ · Apple silicon & Intel · Local development version 0.1.0
+macOS 14+ · Apple silicon & Intel · Local development version 0.1.1
 
 - Adjustable dimming intensity, with a preview.
 - Toggle from the menu bar or **Control–Option–D**.
 - Optional launch at login.
 - Window events instead of repeated desktop polling; no screen capture or uploads.
+- Dimming sits behind the real window, preserving native corners during dragging and resizing without a moving cutout.
 
 Build: `./build.sh universal` · Test: `swift test`
 
@@ -17,4 +18,4 @@ If Settings shows Hush enabled but Preferences still asks for access after resta
 
 These local builds are ad-hoc signed and not notarized. No update feed or public release has been configured yet.
 
-Geometry tests cover Retina-independent coordinates, displays above/left of the primary display, spanning windows, and invalid readings. Live Accessibility tracking, Spaces, fullscreen apps, and multiple physical monitors require hands-on testing after approval.
+Tests cover window identification, opacity limits, and actual window ordering before and after movement and resizing. Spaces, fullscreen apps, and multiple physical monitors still need hands-on verification before a public release.

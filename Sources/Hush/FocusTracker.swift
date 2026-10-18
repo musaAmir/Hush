@@ -3,7 +3,7 @@ import ApplicationServices
 import HushCore
 
 final class FocusTracker {
-    var onWindow: ((CGRect?) -> Void)?
+    var onWindow: ((FocusedWindow?) -> Void)?
     var onPermission: ((Bool) -> Void)?
     private let queue = DispatchQueue(label: "com.musaamir.hush.accessibility", qos: .userInitiated)
     private var subscriptions: [NSObjectProtocol] = []
@@ -18,7 +18,7 @@ final class FocusTracker {
     private var app: AXUIElement?
     private var window: AXUIElement?
     private var pid: pid_t = 0
-    private let windowEvents = [kAXMovedNotification, kAXResizedNotification,
+    private let windowEvents = [kAXResizedNotification,
         kAXUIElementDestroyedNotification, kAXWindowMiniaturizedNotification, kAXWindowDeminiaturizedNotification]
 
     func start() {
@@ -60,11 +60,15 @@ final class FocusTracker {
 
     func refresh() {
         guard enabled, !suspended else { return }
-        pending?.cancel()
-        // Coalesce bursts from window movement without a repeating timer.
-        let work = DispatchWorkItem { [weak self] in self?.readFrontWindow() }
+        guard pending == nil else { return }
+        // Coalesce focus notifications within one main-loop turn. Window movement
+        // needs no reads or redraws: the shade remains below the actual window.
+        let work = DispatchWorkItem { [weak self] in
+            self?.pending = nil
+            self?.readFrontWindow()
+        }
         pending = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02, execute: work)
+        DispatchQueue.main.async(execute: work)
     }
 
     private func readFrontWindow() {
@@ -82,7 +86,6 @@ final class FocusTracker {
         guard !readInFlight else { needsRefresh = true; return }
         readInFlight = true
         let frontPID = front.processIdentifier
-        let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
         queue.async {
             if self.pid != frontPID {
                 self.clearObservation()
@@ -135,15 +138,27 @@ final class FocusTracker {
                   AXValueGetValue(unsafeBitCast(sizeValue, to: AXValue.self), .cgSize, &size) else {
                 self.deliver(nil, token: token); return
             }
-            self.deliver(FocusGeometry.cocoaRect(fromAccessibility: CGRect(origin: position, size: size), primaryHeight: primaryHeight), token: token)
+            let frame = CGRect(origin: position, size: size)
+            // IDs, bounds, ownership and levels only; never read titles or pixels.
+            let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+            let candidates = info.compactMap { item -> WindowCandidate? in
+                guard let owner = item[kCGWindowOwnerPID as String] as? NSNumber, owner.int32Value == frontPID,
+                      let number = item[kCGWindowNumber as String] as? NSNumber,
+                      let level = item[kCGWindowLayer as String] as? NSNumber,
+                      let bounds = item[kCGWindowBounds as String] as? NSDictionary,
+                      let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary) else { return nil }
+                return WindowCandidate(number: number.intValue, level: level.intValue, ownerPID: owner.int32Value,
+                                       frame: rect, alpha: (item[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1)
+            }
+            self.deliver(WindowMatching.focusedWindow(ownerPID: frontPID, frame: frame, candidates: candidates), token: token)
         }
     }
 
-    private func deliver(_ rect: CGRect?, token: Int) {
+    private func deliver(_ window: FocusedWindow?, token: Int) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.readInFlight = false
-            if self.enabled, !self.suspended, self.generation == token { self.onWindow?(rect) }
+            if self.enabled, !self.suspended, self.generation == token { self.onWindow?(window) }
             if self.needsRefresh { self.needsRefresh = false; self.refresh() }
         }
     }
