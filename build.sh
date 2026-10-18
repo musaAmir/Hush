@@ -21,6 +21,9 @@ INPUTS=()
 for BIN in "${BINS[@]}"; do INPUTS+=("$BIN/$NAME"); done
 lipo -create "${INPUTS[@]}" -output "$APP/Contents/MacOS/$NAME"
 strip -x "$APP/Contents/MacOS/$NAME"
+# Sparkle's universal framework keeps its own signature; the app is signed around it.
+mkdir -p "$APP/Contents/Frameworks"
+ditto "build/spm-${ARCHITECTURES[0]}/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 if [[ "$NAME" == UniCopy ]]; then
   mkdir -p "$APP/Contents/Helpers"
   INPUTS=()

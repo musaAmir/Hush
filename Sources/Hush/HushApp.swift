@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import HushCore
+import Sparkle
 
 @main enum HushApp {
     static func main() {
@@ -16,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = HushSettings()
     private let tracker = FocusTracker()
     private let dimmer = Dimmer()
+    // Checks the GitHub-hosted appcast (SUFeedURL in Info.plist) for new releases.
+    private let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     private var statusItem: NSStatusItem!
     private var toggleItem: NSMenuItem!
     private var pauseItem: NSMenuItem!
@@ -50,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         resumeItem = item("Resume Dimming", #selector(resume)); menu.addItem(resumeItem)
         menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(showSettings), key: ","))
+        menu.addItem(item("Check for Updates…", #selector(checkForUpdates)))
         menu.addItem(item("Quit Hush", #selector(quit), key: "q"))
         statusItem.menu = menu
         NSApp.mainMenu = mainMenu()
@@ -80,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let main = NSMenu()
         let app = NSMenu(title: "Hush")
         app.addItem(item("Settings…", #selector(showSettings), key: ","))
+        app.addItem(item("Check for Updates…", #selector(checkForUpdates)))
         app.addItem(.separator())
         app.addItem(item("Quit Hush", #selector(quit), key: "q"))
         let window = NSMenu(title: "Window")
@@ -164,7 +169,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func showSettings() {
         if settingsWindow == nil {
-            let controller = SettingsWindowController(settings: settings)
+            let controller = SettingsWindowController(settings: settings, updater: updater.updater)
+            controller.onCheckForUpdates = { [weak self] in self?.checkForUpdates() }
             controller.onEnabledChange = { [weak self] in self?.setEnabled($0) }
             controller.onPause = { [weak self] in self?.pause(minutes: $0) }
             controller.onChange = { [weak self] in self?.applyAppearance(); self?.tracker.refresh(); self?.syncControls() }
@@ -183,6 +189,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Show the Dock icon (and app menu) only while Settings is open.
         NSApp.setActivationPolicy(.regular)
         syncControls(); settingsWindow?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
+    }
+    @objc private func checkForUpdates() {
+        // A menu bar app isn't active by default; bring Sparkle's window forward.
+        NSApp.activate(ignoringOtherApps: true); updater.checkForUpdates(nil)
     }
     @objc private func quit() { NSApp.terminate(nil) }
 }

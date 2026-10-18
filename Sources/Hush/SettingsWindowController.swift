@@ -3,6 +3,7 @@ import QuartzCore
 import ServiceManagement
 import UniformTypeIdentifiers
 import HushCore
+import Sparkle
 
 final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
     var onEnabledChange: ((Bool) -> Void)?
@@ -12,7 +13,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTa
     var onRecordingChange: ((Bool) -> Void)?
     var onRequestAccess: (() -> Void)?
     var onClose: (() -> Void)?
+    var onCheckForUpdates: (() -> Void)?
     private let settings: HushSettings
+    private let updater: SPUUpdater
     private let tabs = NSTabView()
     private let navigation = NSTableView()
     private let sections: [(title: String, symbol: String, color: NSColor)] = [
@@ -40,8 +43,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTa
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0.05) : NSColor(white: 0, alpha: 0.04)
     }
 
-    init(settings: HushSettings) {
-        self.settings = settings
+    init(settings: HushSettings, updater: SPUUpdater) {
+        self.settings = settings; self.updater = updater
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 640), styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "Hush Settings"; window.isReleasedWhenClosed = false
         // An empty toolbar puts the page title beside the sidebar, as in System Settings.
@@ -101,6 +104,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTa
         window.title = sections[max(navigation.selectedRow, 0)].title
         window.setContentSize(NSSize(width: 800, height: 640))
         window.center(); updateAppearance()
+        // Pages taller than the window otherwise open scrolled under the toolbar.
+        window.layoutIfNeeded()
+        for case let scroll as NSScrollView in tabs.tabViewItems.compactMap(\.view) {
+            scroll.contentView.scroll(to: NSPoint(x: 0, y: -scroll.contentInsets.top))
+            scroll.reflectScrolledClipView(scroll.contentView)
+        }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
@@ -170,6 +179,15 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTa
         styleDetail(permission)
         let access = row(label("Window access"), NSButton(title: "Enable Accessibility…", target: self, action: #selector(requestAccess)), NSButton(title: "Open System Settings", target: self, action: #selector(openAccess)))
         stack.addArrangedSubview(group("Accessibility", [access], footer: [permission, detail("Hush uses window events. It never records your screen or sends data anywhere.")]))
+
+        let automatic = NSSwitch(); automatic.target = self; automatic.action = #selector(changeAutomaticUpdates(_:))
+        automatic.state = updater.automaticallyChecksForUpdates ? .on : .off
+        automatic.setAccessibilityLabel("Check for updates automatically")
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–"
+        stack.addArrangedSubview(group("Updates", [
+            row(label("Check for updates automatically"), automatic),
+            row(label("Hush \(version)"), NSButton(title: "Check Now", target: self, action: #selector(checkForUpdates)))
+        ], footer: [detail("Updates come from Hush releases on GitHub.")]))
         return stack
     }
     private func appearance() -> NSView {
@@ -283,6 +301,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, NSTa
         duration.isEnabled = settings.fadesEnabled; curve.isEnabled = settings.fadesEnabled
         preview.intensity = settings.intensity
     }
+    @objc private func changeAutomaticUpdates(_ sender: NSSwitch) { updater.automaticallyChecksForUpdates = sender.state == .on }
+    @objc private func checkForUpdates() { onCheckForUpdates?() }
     @objc private func requestAccess() { onRequestAccess?() }
     @objc private func openAccess() { NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!) }
     @objc private func changeLogin(_ sender: NSSwitch) {

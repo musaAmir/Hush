@@ -12,4 +12,7 @@
 <key>LSUIElement</key><true/>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>SUFeedURL</key><string>https://raw.githubusercontent.com/musaAmir/Hush/main/appcast.xml</string>
+<key>SUPublicEDKey</key><string>1mElbsb/KapBGffWjLBd3BgaI+NzfEiAKW+E4dAhP/A=</string>
+<key>SUEnableAutomaticChecks</key><true/>
 </dict></plist>

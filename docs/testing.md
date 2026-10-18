@@ -25,3 +25,9 @@ Settings now use a full-height AppKit sidebar with colored section icons, the pa
 The isolated settings preview (since removed) was used to inspect General, Appearance, Shortcuts, and Exceptions, invoke the fade preview, start/cancel shortcut recording, and add/remove an app exception. The empty and populated exception lists were visually checked. The existing 12 tests and universal build are the release checks.
 
 On this macOS 27 toolchain, the default SwiftPM Xcode backend recorded SDK 14.0 in the executable even with the 27.0 SDK selected. The release script uses native SwiftPM instead: `vtool -show-build` must show SDK 27.0 and minimum macOS 14.0 in both slices. Native SwiftPM is deprecated in this toolchain; reassess this workaround when upgrading SwiftPM.
+
+## Updates (Sparkle)
+
+Hush uses Sparkle 2.10 (SwiftPM) for in-app updates. The feed is `appcast.xml` on `main` (`SUFeedURL`), and each release zip is a GitHub release asset signed with the EdDSA key in the login Keychain (account `com.musaamir.hush`). `scripts/release.sh "notes"` builds, signs, creates the release and publishes the feed. Back up the private key with `generate_keys --account com.musaamir.hush -x <file>`; without it, existing installs cannot accept updates.
+
+An end-to-end check used a 0.2.1 copy with a separate bundle ID and a local signed feed: it downloaded a 9.9.9 build automatically and replaced itself on quit with a valid signature. Ad-hoc signing changes the code identity each release, so Accessibility must be re-granted after every update until releases use a stable signing certificate.
