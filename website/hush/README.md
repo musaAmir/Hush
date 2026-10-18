@@ -19,11 +19,11 @@ publishes `dist/`. Re-run it from the Actions tab with **Run workflow**.
 
 ## Content
 
-- The hero desktop, the Exceptions list, the Settings panel and the setup steps are
-  HTML recreations of Hush; the three Settings images are real screenshots of the app.
+- The hero demo (wallpaper, windows, menu bar and the Hush menu) is built in HTML and
+  dims like the app. The four Settings images are real screenshots of Hush.
 - Download links point to the GitHub releases page. Once a release is published,
   link straight to its zip.
-- Bricolage Grotesque (SIL Open Font License) is self-hosted. No analytics, cookies or
-  third-party requests.
-- Photos: "facade.jpg" by Roman Kraft and "curves.jpg" by Len dela Cruz, both on
-  Unsplash (Unsplash License), credited in the footer.
+- Apple's system font, like the app. No web fonts, analytics, cookies or third-party
+  requests.
+- Photos from Unsplash (Unsplash License), credited in the footer: the wallpaper by
+  Alexey Topolyanskiy and "facade.jpg" by Roman Kraft.

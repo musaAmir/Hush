@@ -1,19 +1,19 @@
-// Hush website. Everything works without this script; it adds the live demo and entrances.
+// Hush website. The page reads fine without this script; it adds the live demo.
 document.documentElement.classList.add("js");
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const fadeMs = reduceMotion ? 0 : 500;
 
-// The demo desktop behaves like Hush: the shade over other windows never resets.
-// Only the window losing focus fades down under its own veil, then joins the rest.
+// Scale the 1280 × 800 desktop to fit its screen.
+const screen = document.querySelector(".screen");
 const desktop = document.querySelector(".desktop");
+new ResizeObserver(([entry]) => desktop.style.setProperty("--scale", entry.contentRect.width / 1280)).observe(screen);
+
+// Focus behaves like Hush: the dimming over other windows never resets.
+// Only the window losing focus fades down under its own veil, then joins the rest.
 const windows = [...document.querySelectorAll(".win")];
 const frontApp = document.querySelector(".front-app");
-const intensity = document.getElementById("intensity");
-const intensityValue = document.getElementById("intensity-value");
-const ctaLevel = document.getElementById("cta-level");
 let order = windows.filter((w) => !w.classList.contains("is-focused"));
 let leaveTimer;
-
 function focusWindow(next) {
   const current = document.querySelector(".win.is-focused");
   if (next === current) return;
@@ -21,7 +21,7 @@ function focusWindow(next) {
   document.querySelectorAll(".win.is-leaving").forEach((w) => w.classList.remove("is-leaving"));
   order = order.filter((w) => w !== next);
   if (current) {
-    current.classList.remove("is-focused"); current.setAttribute("aria-pressed", "false");
+    current.classList.remove("is-focused");
     order.push(current);
     if (desktop.dataset.dimming === "on" && fadeMs) {
       current.classList.add("is-leaving");
@@ -29,121 +29,80 @@ function focusWindow(next) {
     }
   }
   order.forEach((w, i) => w.style.setProperty("--z", i + 1));
-  next.classList.add("is-focused"); next.setAttribute("aria-pressed", "true");
+  next.classList.add("is-focused");
   frontApp.textContent = next.dataset.app;
 }
-windows.forEach((w) => w.addEventListener("click", () => focusWindow(w)));
+windows.forEach((w) => w.addEventListener("click", () => { closeMenu(); focusWindow(w); }));
 
-function setDimming(on) { desktop.dataset.dimming = on ? "on" : "off"; }
-document.querySelector(".hush-item").addEventListener("click", () => setDimming(desktop.dataset.dimming !== "on"));
+// The Hush menu bar item and its menu.
+const item = document.querySelector(".hush-item");
+const menu = document.querySelector(".hush-menu");
+const toggleItem = menu.querySelector('[data-action="toggle"]');
+const pauseGroup = menu.querySelector(".has-sub");
+const resumeItem = menu.querySelector('[data-action="resume"]');
+let paused = false;
+function render() {
+  const on = toggleItem.getAttribute("aria-checked") === "true";
+  desktop.dataset.dimming = on && !paused ? "on" : "off";
+  toggleItem.querySelector(".check").textContent = on && !paused ? "✓" : "";
+  pauseGroup.hidden = !on || paused;
+  resumeItem.hidden = !paused;
+}
+function setEnabled(on) { paused = false; toggleItem.setAttribute("aria-checked", String(on)); render(); }
+function closeMenu() { menu.hidden = true; item.setAttribute("aria-expanded", "false"); }
+item.addEventListener("click", (event) => {
+  event.stopPropagation();
+  desktop.classList.add("has-tried");
+  const open = menu.hidden;
+  menu.hidden = !open; item.setAttribute("aria-expanded", String(open));
+  // Keyboard users land on the first item; a mouse click leaves the menu unfocused, like macOS.
+  if (open && event.detail === 0) toggleItem.focus({ preventScroll: true });
+});
+menu.addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  event.stopPropagation();
+  const action = button.dataset.action;
+  if (action === "pause") return;
+  if (action === "toggle") setEnabled(toggleItem.getAttribute("aria-checked") !== "true");
+  if (button.dataset.pause) { paused = true; render(); }
+  if (action === "resume") { paused = false; render(); }
+  if (action === "settings") document.getElementById("features").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+  closeMenu();
+});
+document.addEventListener("click", closeMenu);
 addEventListener("keydown", (event) => {
-  if (event.ctrlKey && event.altKey && event.code === "KeyD") { event.preventDefault(); setDimming(desktop.dataset.dimming !== "on"); }
+  if (event.key === "Escape") closeMenu();
+  if (event.ctrlKey && event.altKey && event.code === "KeyD") {
+    event.preventDefault(); desktop.classList.add("has-tried");
+    setEnabled(paused ? true : toggleItem.getAttribute("aria-checked") !== "true");
+  }
 });
 
-function fill(range) {
-  range.style.setProperty("--fill", ((range.value - range.min) / (range.max - range.min)) * 100 + "%");
-}
-function setLevel(value, source) {
-  const level = Math.min(85, Math.max(5, Math.round(Number(value) || 45)));
-  desktop.style.setProperty("--dim", level / 100);
-  intensityValue.textContent = level + "%";
-  if (source !== intensity) { intensity.value = level; }
-  if (source !== ctaLevel) { ctaLevel.value = level; }
-  fill(intensity);
-}
-intensity.addEventListener("input", () => setLevel(intensity.value, intensity));
-ctaLevel.addEventListener("input", () => { if (ctaLevel.value !== "") setLevel(ctaLevel.value, ctaLevel); });
-ctaLevel.addEventListener("change", () => setLevel(ctaLevel.value));
-fill(intensity);
-
-// Exceptions: type an app and it joins the list.
-const known = {
-  keynote: ["com.apple.Keynote", "#f39c12"], figma: ["com.figma.Desktop", "#a259ff"],
-  "final cut pro": ["com.apple.FinalCut", "#3a3a3c"], "quicktime player": ["com.apple.QuickTimePlayerX", "#1e6fd9"],
-  zoom: ["us.zoom.xos", "#2d8cff"], photoshop: ["com.adobe.Photoshop", "#0b2b4f"], xcode: ["com.apple.dt.Xcode", "#1f7fe0"],
-};
-const appInput = document.getElementById("app-input");
-function showException(raw) {
-  const name = raw.trim() || "Keynote";
-  const [id, colour] = known[name.toLowerCase()] ||
-    ["com." + name.toLowerCase().replace(/[^a-z0-9]+/g, "") + ".app", "#5f6b62"];
-  document.getElementById("ex-name").textContent = name;
-  document.getElementById("ex-id").textContent = id;
-  const icon = document.getElementById("ex-icon");
-  icon.textContent = name[0].toUpperCase(); icon.style.setProperty("--c", colour);
-  document.getElementById("ex-foot").textContent = `Dimming pauses while ${name} is active and comes back when you switch away.`;
-}
-appInput.addEventListener("input", () => showException(appInput.value));
-document.querySelectorAll("[data-example]").forEach((button) => button.addEventListener("click", () => {
-  appInput.value = button.dataset.example; showException(appInput.value); appInput.focus();
-}));
-
-// Settings plate: pointing at a note dims the rest of the panel, the way Hush would.
-const panel = document.querySelector(".panel");
-function light(target) {
-  panel.querySelectorAll(".is-lit").forEach((el) => el.classList.remove("is-lit"));
-  document.querySelectorAll(".note.is-on").forEach((el) => el.classList.remove("is-on"));
-  if (!target) { panel.classList.remove("has-focus"); return; }
-  panel.querySelector(`[data-part="${target.dataset.target}"]`)?.classList.add("is-lit");
-  target.classList.add("is-on"); panel.classList.add("has-focus");
-}
-document.querySelectorAll(".note").forEach((note) => {
-  note.addEventListener("mouseenter", () => light(note));
-  note.addEventListener("focus", () => light(note));
-  note.addEventListener("click", () => light(note.classList.contains("is-on") && panel.classList.contains("has-focus") ? null : note));
-  note.addEventListener("mouseleave", () => light(null));
-  note.addEventListener("blur", () => light(null));
+const intensity = document.getElementById("intensity");
+const intensityValue = document.getElementById("intensity-value");
+intensity.addEventListener("input", () => {
+  desktop.style.setProperty("--dim", intensity.value / 100);
+  intensityValue.textContent = intensity.value + "%";
 });
 
-// Privacy: the pinned fragment follows the statement in view.
-const sees = document.querySelector(".sees");
-const steps = new IntersectionObserver((entries) => {
-  entries.forEach((entry) => { if (entry.isIntersecting) sees.dataset.step = entry.target.dataset.step; });
-}, { rootMargin: "-45% 0px -45% 0px" });
-document.querySelectorAll(".pstep").forEach((step) => steps.observe(step));
-
-// Setup: one slider drives the clause and the fragment.
-const clauses = ["First, download and unzip.", "Then, allow Accessibility.", "Next, click any window.", "Finally, rest with ⌃⌥D."];
-const names = ["Download and unzip", "Allow Accessibility", "Click any window", "Rest with Control, Option, D"];
-const stage = document.getElementById("stage");
-const clause = document.querySelector(".clause");
-const frag = document.querySelector(".setup-frag");
-const stageNames = document.querySelectorAll(".stage-names span");
-let swap;
-stage.addEventListener("input", () => {
-  const i = Number(stage.value);
-  fill(stage); frag.dataset.stage = i;
-  stage.setAttribute("aria-valuetext", names[i]);
-  stageNames.forEach((el, n) => el.classList.toggle("is-on", n === i));
-  clearTimeout(swap);
-  clause.classList.add("is-swapping");
-  swap = setTimeout(() => { clause.textContent = clauses[i]; clause.classList.remove("is-swapping"); }, reduceMotion ? 0 : 200);
-});
-fill(stage);
-
-// Questions: one answer pane on wide screens, inline answers on phones.
-const questions = [...document.querySelectorAll(".q")];
-const answer = document.getElementById("faq-answer");
-function choose(q) {
-  questions.forEach((other) => { other.classList.toggle("is-on", other === q); other.setAttribute("aria-expanded", String(other === q)); });
-  if (answer.textContent === q.nextElementSibling.textContent) return;
-  answer.classList.add("is-swapping");
-  setTimeout(() => { answer.textContent = q.nextElementSibling.textContent; answer.classList.remove("is-swapping"); }, reduceMotion ? 0 : 150);
+// Features: each one shows its page of the real Settings window.
+const features = [...document.querySelectorAll(".feature")];
+const shots = [...document.querySelectorAll(".shot img")];
+function show(feature) {
+  features.forEach((f) => { f.classList.toggle("is-on", f === feature); f.setAttribute("aria-selected", String(f === feature)); });
+  shots.forEach((img) => img.classList.toggle("is-on", img.dataset.name === feature.dataset.shot));
 }
-const wide = matchMedia("(min-width: 901px)");
-questions.forEach((q) => {
-  q.addEventListener("click", () => choose(q));
-  q.addEventListener("focus", () => choose(q));
-  q.addEventListener("mouseenter", () => { if (wide.matches) choose(q); });
+features.forEach((f) => {
+  f.addEventListener("click", () => show(f));
+  f.addEventListener("mouseenter", () => { if (matchMedia("(hover: hover)").matches) show(f); });
 });
 
 // Entrances: each section's parts rise in turn as it enters.
-const reveals = new IntersectionObserver((entries) => {
-  entries.forEach((entry) => {
-    if (!entry.isIntersecting) return;
-    entry.target.classList.add("is-in"); reveals.unobserve(entry.target);
-  });
-}, { rootMargin: "0px 0px -8% 0px" });
+const reveals = new IntersectionObserver((entries) => entries.forEach((entry) => {
+  if (!entry.isIntersecting) return;
+  entry.target.classList.add("is-in"); reveals.unobserve(entry.target);
+}), { rootMargin: "0px 0px -6% 0px" });
 document.querySelectorAll("section").forEach((section) => {
   section.querySelectorAll(".reveal").forEach((el, i) => { el.style.setProperty("--i", i); reveals.observe(el); });
 });
