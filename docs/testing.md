@@ -8,4 +8,4 @@ The front app's Accessibility focus/lifecycle events identify its focused window
 
 Manually check normal windows, rapid dragging, resize, app switching, same-app windows, dialogs, fullscreen, Spaces, display connection changes and sleep/wake before a public release. Overlays must ignore mouse input and never take keyboard focus. Keep the updated binary unchanged while checking permissions: an ad-hoc rebuild can invalidate its existing Accessibility entry.
 
-The 0.1.1 build passes four core tests and the Window Server ordering regression. The original renderer failed that regression before the change. Final visual confirmation of the user's Finder dragging/corner scenario is pending renewed Accessibility approval for this rebuilt binary.
+The 0.1.1 build passes four core tests and the Window Server ordering regression. The original renderer failed that regression before the change. The rebuilt app was reopened and its renewed Accessibility approval confirmed in Preferences. Final visual confirmation of the user's Finder dragging/corner scenario is pending.
