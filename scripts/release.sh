@@ -15,6 +15,8 @@ ZIP="build/Hush-$VERSION.zip"
 if gh release view "$TAG" >/dev/null 2>&1; then echo "Release $TAG already exists. Bump the version in Info.plist."; exit 1; fi
 
 ./build.sh universal
+# Releases must keep the same identity, or every update resets Accessibility.
+codesign -dvv build/Hush.app 2>&1 | grep -q "^Authority=Hush Signing$" || { echo "Release must be signed with the Hush Signing certificate."; exit 1; }
 rm -f "$ZIP"
 ditto -c -k --keepParent build/Hush.app "$ZIP"
 (cd build && shasum -a 256 "Hush-$VERSION.zip" > "Hush-$VERSION.sha256")

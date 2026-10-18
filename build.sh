@@ -33,9 +33,14 @@ if [[ "$NAME" == UniCopy ]]; then
   codesign --force --sign - --timestamp=none "$APP/Contents/Helpers/UniCopyOCR"
 fi
 swift scripts/make-icon.swift "$NAME" "$APP/Contents/Resources/AppIcon.icns"
-codesign --force --sign - --timestamp=none "$APP"
+# A stable certificate keeps Accessibility approval across rebuilds and updates.
+# Ad-hoc signing changes the app's identity on every build.
+IDENTITY="${HUSH_SIGN_IDENTITY:-Hush Signing}"
+if security find-certificate -c "$IDENTITY" >/dev/null 2>&1; then SIGNED="signed by $IDENTITY"
+else echo "warning: \"$IDENTITY\" certificate not found; signing ad-hoc." >&2; IDENTITY="-"; SIGNED="ad-hoc signed"; fi
+codesign --force --sign "$IDENTITY" --timestamp=none "$APP"
 codesign --verify --deep --strict "$APP"
 # Replace only this script's build output.
 rm -rf "build/$NAME.app"
 mv "$APP" "build/$NAME.app"
-echo "Built $PWD/build/$NAME.app ($MODE; ad-hoc signed, not notarized)"
+echo "Built $PWD/build/$NAME.app ($MODE; $SIGNED, not notarized)"
