@@ -26,6 +26,7 @@
   <header class="nav">
     <a class="wordmark" href="#" aria-label="Hush home"><img src="assets/app-icon.png" alt="" width="28" height="28">Hush</a>
     <nav aria-label="Main">
+      <a href="#film">Watch</a>
       <a href="#features">Features</a>
       <a href="#questions">Questions</a>
       <a href="https://github.com/musaAmir/Hush" target="_blank" rel="noopener noreferrer">GitHub</a>
@@ -149,6 +150,17 @@
         <p>Click any window to focus it. The Hush icon in the menu bar turns dimming off and on, and so does <kbd>⌃</kbd><kbd>⌥</kbd><kbd>D</kbd>.</p>
         <label class="intensity"><span>Dimming</span><input id="intensity" type="range" min="5" max="85" value="45"><output id="intensity-value" for="intensity">45%</output></label>
       </div>
+    </section>
+
+    <!-- The launch film. -->
+    <section class="film" id="film" aria-labelledby="film-title">
+      <h2 id="film-title" class="reveal">See it in 25 seconds.</h2>
+      <figure class="film-frame reveal">
+        <video controls playsinline preload="none" poster="assets/hush-launch-poster.jpg" width="1920" height="1080" aria-label="Hush launch film">
+          <source src="assets/hush-launch.mp4" type="video/mp4">
+          <a href="assets/hush-launch.mp4">Watch the Hush launch film</a>
+        </video>
+      </figure>
     </section>
 
     <!-- Features, each shown in the real Settings window. -->

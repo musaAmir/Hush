@@ -21,6 +21,11 @@
 
 <p align="center"><sub>Try it live on the <a href="https://musaamir.github.io/Hush/">website</a>: click any window, or the Hush icon in the menu bar.</sub></p>
 
+<p align="center">
+  <a href="https://musaamir.github.io/Hush/#film"><img src="website/hush/dist/assets/hush-launch-poster.jpg" alt="Hush launch film: watch it on the website" width="720"></a><br>
+  <sub><a href="https://musaamir.github.io/Hush/#film">▶ Watch the 25-second launch film</a></sub>
+</p>
+
 ## Features
 
 - **Focus on one window.** Everything behind the window you’re using dims, on every display. Switching windows fades only the one you leave.
